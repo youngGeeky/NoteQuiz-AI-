@@ -16,7 +16,7 @@ app.get('/', (req, res) => {
 
 app.post('/generate-quiz', async (req, res) => {
     try {
-        const { prompt } = req.body;
+        const { prompt } = req.body.prompt;
         const apiKey = process.env.GOOGLE_API_KEY;
 
         if (!apiKey) return res.status(500).json({ error: 'Server missing GOOGLE_API_KEY' });
