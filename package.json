@@ -2,10 +2,10 @@
   "name": "quizzer",
   "version": "1.0.0",
   "description": "NoteQuiz AI Application",
-  "main": "server.js",
+  "main": "api/index.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js",
+    "start": "vercel dev",
+    "dev": "vercel dev",
     "vercel-build": "echo 'Build completed'"
   },
   "keywords": [

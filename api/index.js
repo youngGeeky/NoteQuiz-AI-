@@ -16,12 +16,13 @@ app.get('/', (req, res) => {
 
 app.post('/generate-quiz', async (req, res) => {
     try {
-        const { prompt } = req.body.prompt;
-        const apiKey = process.env.GOOGLE_API_KEY;
+        const { prompt } = req.body;
+        //const apiKey = process.env.GOOGLE_API_KEY;
+        const apiKey = "AIzaSyBEzyosrMi4cNVG7ymcfLhCD7QkwNJUBQM";
 
         if (!apiKey) return res.status(500).json({ error: 'Server missing GOOGLE_API_KEY' });
 
-        const MODEL = 'gemini-1.5-flash';
+        const MODEL = 'gemini-3-flash-preview';
         const URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${apiKey}`;
 
         const requestBody = {

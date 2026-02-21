@@ -55,4 +55,19 @@ Add in Vercel dashboard under "Settings" → "Environment Variables"
 ## Notes
 - The app is configured to work with Vercel's serverless infrastructure
 - Static files (HTML, CSS, JS) are automatically served
-- Node.js 18.x is specified for compatibility
+ - Node.js 24.x is specified for Vercel compatibility
+
+## Vercel Analytics (Quick setup)
+
+1. In the Vercel dashboard for your project enable Analytics/Insights.
+2. In your deployed site, add the provided client snippet. A client-side
+	snippet has been added to `file.html` already using your Project ID.
+	If you need to change it, edit the `data-project-id` value.
+
+3. Server-side events (optional):
+	- We added a safe placeholder in `server.js` for server-side wiring.
+	- If you want to send server-side events, require `@vercel/analytics`
+	  inside a try/catch and call the SDK methods inside the example
+	  middleware block.
+
+4. Verify data in the Vercel dashboard under Analytics → Insights.
