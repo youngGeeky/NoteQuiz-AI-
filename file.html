@@ -164,50 +164,46 @@
 
     async function generateQuiz() {
         const text = document.getElementById('note-input').value;
-        const count = document.getElementById('num-questions').value;
-        const apiKey = "AIzaSyBGcBn0km275OUk6jEyoUh2ZVla4ldi464";
-
-        if (!text || !apiKey) {
-            alert("Please enter both notes and your API key!");
-            return;
-        }
-
-        document.getElementById('loading').classList.remove('hidden');
-        
-        // Using gemini-1.5-flash (more reliable than gemini-pro)
-        const MODEL = "gemini-3-flash-preview";
-        const URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${apiKey}`;
-
+        const count = parseInt(document.getElementById('num-questions').value, 10) || 3;
         const prompt = `Convert the following notes into exactly ${count} multiple-choice questions. 
         Return ONLY a raw JSON array. 
         Format: [{"question": "...", "option1": "...", "option2": "...", "option3": "...", "option4": "...", "answer": 1}]
         The 'answer' key must be a number (1, 2, 3, or 4) corresponding to the correct option.
-        Notes: ${text}`;
+        Notes: ${text}`
+
+        if (!text) {
+            alert('Please enter your notes before generating the quiz.');
+            return;
+        }
+
+        document.getElementById('loading').classList.remove('hidden');
 
         try {
-            const response = await fetch(URL, {
+            const resp = await fetch('/generate-quiz', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{ parts: [{ text: prompt }] }]
-                })
+                body: JSON.stringify({ prompt: prompt })
             });
 
-            const data = await response.json();
-            
-            if (data.error) throw new Error(data.error.message);
+            const data = await resp.json();
+            if (!resp.ok) throw new Error(data.error || 'Generation failed');
 
-            const rawText = data.candidates[0].content.parts[0].text;
-            
-            // Extract JSON from potential markdown backticks
-            const jsonMatch = rawText.match(/\[.*\]/s);
-            if (!jsonMatch) throw new Error("AI did not return valid JSON");
-            
-            quizData = JSON.parse(jsonMatch[0]);
+            let quiz = null;
+
+            if (data.candidates && data.candidates[0]) {
+                const rawText = data.candidates[0].content?.parts?.[0]?.text || '';
+                const jsonMatch = rawText.match(/\[.*\]/s);
+                if (!jsonMatch) throw new Error('AI did not return valid JSON');
+                quiz = JSON.parse(jsonMatch[0]);
+            }
+
+            if (!Array.isArray(quiz) || quiz.length === 0) throw new Error('Empty quiz returned');
+
+            quizData = quiz;
             startQuiz();
         } catch (error) {
-            console.error(error);
-            alert("Error: " + error.message);
+            console.error('generateQuiz error', error);
+            alert('Error: ' + (error.message || String(error)));
         } finally {
             document.getElementById('loading').classList.add('hidden');
         }
