@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NoteQuiz AI</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
         :root {
             --bg-white: #F8F9FA;
@@ -117,6 +120,58 @@
         .correct-answer { color: var(--green); margin: 0.3rem 0; }
         .incorrect-answer { color: var(--red); margin: 0.3rem 0; }
 
+        input[type="file"] {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            border: 2px solid var(--light-grey);
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            box-sizing: border-box;
+            cursor: pointer;
+            font-size: 0.95rem;
+            background-color: var(--bg-white);
+            transition: border-color 0.2s, background-color 0.2s;
+        }
+
+        input[type="file"]:hover {
+            border-color: var(--blue);
+            background-color: #f0f7ff;
+        }
+
+        input[type="file"]:focus {
+            outline: none;
+            border-color: var(--blue);
+            box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.1);
+        }
+
+        .file-upload-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .file-upload-section label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        #file-status {
+            margin: 0;
+            font-size: 0.9rem;
+            color: var(--blue);
+            display: none;
+            padding: 8px 12px;
+            background-color: rgba(13, 110, 253, 0.1);
+            border-radius: 6px;
+            margin-top: 0.5rem;
+        }
+
+        #file-status.error {
+            color: var(--red);
+            background-color: rgba(220, 53, 69, 0.1);
+        }
+
     </style>
 </head>
 <body>
@@ -125,6 +180,12 @@
     <!-- SETUP SCREEN -->
     <div id="input-section">
         <h1>Note to Quiz</h1>
+        <div class="file-upload-section">
+            <label for="file-upload">Upload File or Paste Notes</label>
+            <input type="file" id="file-upload" accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg">
+            <p id="file-status"></p>
+        </div>
+        <p style="text-align: center; color: var(--dark-grey); margin: 1rem 0;">OR</p>
         <textarea id="note-input" placeholder="Paste your study notes or a topic description here..."></textarea>
         <div class="controls">
             <span>Questions:</span>
@@ -161,20 +222,106 @@
     let score = 0;
     let selectedAnswer = null;
     let userAnswers = [];
+    let uploadedFileContent = null;
+
+    // Handle file upload
+    document.getElementById('file-upload').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const fileStatus = document.getElementById('file-status');
+        fileStatus.style.display = 'block';
+        fileStatus.classList.remove('error');
+        fileStatus.innerText = '📄 Processing file...';
+
+        try {
+            uploadedFileContent = await extractTextFromFile(file);
+            fileStatus.innerText = `✅ File loaded: ${file.name}`;
+            fileStatus.classList.remove('error');
+            document.getElementById('note-input').value = '';
+        } catch (error) {
+            fileStatus.innerText = `❌ Error reading file: ${error.message}`;
+            fileStatus.classList.add('error');
+            uploadedFileContent = null;
+        }
+    });
+
+    async function extractTextFromFile(file) {
+        const fileType = file.type;
+        const fileName = file.name.toLowerCase();
+
+        if (fileName.endsWith('.txt')) {
+            return await file.text();
+        } else if (fileType === 'application/pdf' || fileName.endsWith('.pdf')) {
+            return await extractPDFText(file);
+        } else if (fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || 
+                   fileType === 'application/msword' || 
+                   fileName.endsWith('.docx') || 
+                   fileName.endsWith('.doc')) {
+            return await extractWordText(file);
+        } else if (fileType === 'image/png' || fileType === 'image/jpeg' || 
+                   fileName.endsWith('.png') || 
+                   fileName.endsWith('.jpg') || 
+                   fileName.endsWith('.jpeg')) {
+            return await extractImageText(file);
+        } else {
+            throw new Error('Unsupported file type. Please use PDF, Word, TXT, PNG, or JPG files.');
+        }
+    }
+
+    async function extractPDFText(file) {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        let text = '';
+
+        for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            const pageText = textContent.items.map(item => item.str).join(' ');
+            text += pageText + ' ';
+        }
+
+        return text.trim();
+    }
+
+    async function extractWordText(file) {
+        const arrayBuffer = await file.arrayBuffer();
+        const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
+        return result.value;
+    }
+
+    async function extractImageText(file) {
+        const url = URL.createObjectURL(file);
+        try {
+            const result = await Tesseract.recognize(url, 'eng', {
+                logger: (m) => {
+                    if (m.status === 'recognizing text') {
+                        console.log(`OCR Progress: ${Math.round(m.progress * 100)}%`);
+                    }
+                }
+            });
+            return result.data.text;
+        } finally {
+            URL.revokeObjectURL(url);
+        }
+    }
 
     async function generateQuiz() {
-        const text = document.getElementById('note-input').value;
+        const fileText = uploadedFileContent;
+        const textareaText = document.getElementById('note-input').value;
+        const text = fileText || textareaText;
         const count = parseInt(document.getElementById('num-questions').value, 10) || 3;
+
+        if (!text) {
+            alert('Please upload a file or paste your notes before generating the quiz.');
+            return;
+        }
+
         const prompt = `Convert the following notes into exactly ${count} multiple-choice questions. 
         Return ONLY a raw JSON array. 
         Format: [{"question": "...", "option1": "...", "option2": "...", "option3": "...", "option4": "...", "answer": 1}]
         The 'answer' key must be a number (1, 2, 3, or 4) corresponding to the correct option.
         Notes: ${text}`
-
-        if (!text) {
-            alert('Please enter your notes before generating the quiz.');
-            return;
-        }
 
         document.getElementById('loading').classList.remove('hidden');
 
